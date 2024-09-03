@@ -1,4 +1,4 @@
-# Github: https://github.com/naotaka1128/llm_app_codes/chapter05/part1/main.py
+# Github: https://github.com/naotaka1128/llm_app_codes/chapter05/part2/main.py
 
 import traceback
 import streamlit as st
@@ -10,9 +10,8 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-import requests
-from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+from langchain_community.document_loaders import YoutubeLoader  # Youtube用
 
 ###### dotenv を利用しない場合は消してください ######
 try:
@@ -24,7 +23,7 @@ except ImportError:
 ################################################
 
 
-SUMMARIZE_PROMPT = """次の{content}について、日本語で、以下の通り表示してください。1.まず最初に400文字以内で要約を表示 2.次に箇条書きで重要な点を5つ以内で表示
+SUMMARIZE_PROMPT = """以下のコンテンツについて、内容を300文字程度でわかりやすく要約してください。
 
 ========
 
@@ -38,10 +37,10 @@ SUMMARIZE_PROMPT = """次の{content}について、日本語で、以下の通�
 
 def init_page():
     st.set_page_config(
-        page_title="Website Summarizer",
+        page_title="Youtube Summarizer",
         page_icon="🤗"
     )
-    st.header("Website Summarizer 🤗")
+    st.header("Youtube Summarizer 🤗")
     st.sidebar.title("Options")
 
 
@@ -90,20 +89,36 @@ def validate_url(url):
 
 
 def get_content(url):
-    try:
-        with st.spinner("Fetching Website ..."):
-            response = requests.get(url)
-            soup = BeautifulSoup(response.text, 'html.parser')
-            # なるべく本文の可能性が高い要素を取得する
-            if soup.main:
-                return soup.main.get_text()
-            elif soup.article:
-                return soup.article.get_text()
+    """
+    Document:
+        - page_content: str
+        - metadata: dict
+            - source: str
+            - title: str
+            - description: Optional[str],
+            - view_count: int
+            - thumbnail_url: Optional[str]
+            - publish_date: str
+            - length: int
+            - author: str
+    """
+    with st.spinner("Fetching Youtube ..."):
+        loader = YoutubeLoader.from_youtube_url(
+            url,
+            add_video_info=True,  # タイトルや再生数も取得できる
+            language=['en', 'ja']  # 英語→日本語の優先順位で字幕を取得
+        )
+        res = loader.load()  # list of `Document` (page_content, metadata)
+        try:
+            if res:
+                content = res[0].page_content
+                title = res[0].metadata['title']
+                return f"Title: {title}\n\n{content}"
             else:
-                return soup.body.get_text()
-    except:
-        st.write(traceback.format_exc())  # エラーが発生した場合はエラー内容を表示
-        return None
+                return None
+        except:
+            st.write(traceback.format_exc())  # エラーが発生した場合はエラー内容を表示
+            return None
 
 
 def main():
